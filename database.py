@@ -30,18 +30,22 @@ vectorstore = Chroma(
     persist_directory='RAG_vectorstore_db',
     collection_name='research_papers'
 )
+def get_connection():
+    conn = sqlite3.connect("research_assistant.db")
+    conn.execute("PRAGMA foreign_keys = ON")
+    return conn
 
 # saving pdf filename and path into documents table and filepath in documents folder
-async def save_pdf_file(file: UploadFile):
+async def save_pdf_file(file: UploadFile, user_id: int):
         filename = file.filename
-        conn = sqlite3.connect("research_assistant.db")
+        conn = get_connection()
         cursor = conn.cursor()
 
         SQL_query1 = """
-            INSERT INTO documents (filename, filepath) VALUES (?, ?)
+            INSERT INTO documents (user_id, filename, filepath) VALUES (?, ?, ?)
         """
 
-        cursor.execute(SQL_query1, (filename, ""))
+        cursor.execute(SQL_query1, (user_id, filename, ""))
         document_id = cursor.lastrowid
 
         filepath = f'documents/{document_id}.pdf'
@@ -50,22 +54,23 @@ async def save_pdf_file(file: UploadFile):
                         pdf.write(await file.read())
 
         SQL_query2 = """
-            UPDATE documents SET filepath = ? WHERE document_id = ?
+            UPDATE documents SET filepath = ? WHERE document_id = ? AND user_id = ?
         """
 
-        cursor.execute(SQL_query2, (filepath, document_id))
+        cursor.execute(SQL_query2, (filepath, document_id, user_id))
         conn.commit()
         conn.close()
 
         return document_id, filepath, filename
 
-def load_and_chunk_pdf_file(document_id, filepath, filename) -> List[Document]:
+def load_and_chunk_pdf_file(user_id, document_id, filepath, filename) -> List[Document]:
 
     loader = PyPDFLoader(filepath)
     docs = loader.load()
     for doc in docs:
             doc.metadata['filename'] = filename
             doc.metadata['document_id'] = document_id
+            doc.metadata['user_id'] = user_id
 
     splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
     chunks = splitter.split_documents(docs)
@@ -75,13 +80,13 @@ def load_and_chunk_pdf_file(document_id, filepath, filename) -> List[Document]:
            chunk.metadata['chunk_index'] = i
            page_number = chunk.metadata.get('page', -1)
            chunk_text = chunk.page_content
-           row = (document_id, page_number, i, chunk_text)
+           row = (document_id, user_id, page_number, i, chunk_text)
            values.append(row)
 
-    conn = sqlite3.connect("research_assistant.db")
+    conn = get_connection()
     cursor = conn.cursor()
     SQL_query = """
-        INSERT INTO chunks (document_id, page_number, chunk_index, chunk_text) VALUES (?, ?, ?, ?)
+        INSERT INTO chunks (document_id, user_id, page_number, chunk_index, chunk_text) VALUES (?, ?, ?, ?, ?)
     """
 
     cursor.executemany(SQL_query, values)
@@ -93,16 +98,16 @@ def update_vectorstore(chunks: List[Document]):
 
        vectorstore.add_documents(chunks)
 
-def load_chat_history(_):
+def load_chat_history(user_id: int):
 
        history = []
-       conn = sqlite3.connect("research_assistant.db")
+       conn = get_connection()
        cursor = conn.cursor()
        SQL_query = """
-            SELECT role, message FROM chat_history ORDER BY message_id
+            SELECT role, message FROM chat_history WHERE user_id = ? ORDER BY message_id
         """
 
-       cursor.execute(SQL_query)
+       cursor.execute(SQL_query, (user_id,))
        rows = cursor.fetchall()
 
        for role, message in rows:
@@ -116,14 +121,14 @@ def load_chat_history(_):
        conn.close() 
        return history
 
-def get_chat_history():
+def get_chat_history(user_id: int):
 
-        conn = sqlite3.connect("research_assistant.db")
+        conn = get_connection()
         cursor = conn.cursor()
         SQL_query = """
-            SELECT role, message FROM chat_history ORDER BY message_id
+            SELECT role, message FROM chat_history WHERE user_id = ? ORDER BY message_id
         """
-        cursor.execute(SQL_query)
+        cursor.execute(SQL_query, (user_id,))
         rows = cursor.fetchall()
         history = []
         for row in rows:
@@ -136,41 +141,41 @@ def get_chat_history():
         conn.close()
         return history
 
-def save_chat_history(user_input: str, ai: str) -> None:
+def save_chat_history(user_id: int, user_input: str, ai: str) -> None:
 
-       rows = [('user', user_input), ('ai', ai)]
-       conn = sqlite3.connect("research_assistant.db")
+       rows = [(user_id, 'user', user_input), (user_id, 'ai', ai)]
+       conn = get_connection()
        cursor = conn.cursor()
        SQL_query = """
-            INSERT INTO chat_history (role, message) VALUES (?, ?)
+            INSERT INTO chat_history (user_id, role, message) VALUES (?, ?, ?)
         """   
 
        cursor.executemany(SQL_query, rows)
        conn.commit()
        conn.close() 
 
-def get_documents():
+def get_documents(user_id: int):
 
-        conn = sqlite3.connect("research_assistant.db")
+        conn = get_connection()
         cursor = conn.cursor()
         SQL_query = """
-            SELECT document_id, filename FROM documents ORDER BY document_id
+            SELECT document_id, filename FROM documents WHERE user_id = ? ORDER BY document_id
         """    
 
-        cursor.execute(SQL_query)
+        cursor.execute(SQL_query, (user_id,))
         rows = cursor.fetchall()
         conn.close()
         return rows
 
-def delete_document(document_id):
+def delete_document(user_id: int, document_id):
 
-        conn = sqlite3.connect("research_assistant.db")
+        conn = get_connection()
         cursor = conn.cursor()
         SQL_query = """
-            SELECT filepath FROM documents WHERE document_id = ?
+            SELECT filepath FROM documents WHERE document_id = ? AND user_id = ?
         """
 
-        cursor.execute(SQL_query, (document_id,))
+        cursor.execute(SQL_query, (document_id, user_id))
         rows = cursor.fetchone()
         if rows is None:
                 conn.close()
@@ -184,29 +189,35 @@ def delete_document(document_id):
             DELETE FROM chunks WHERE document_id = ?
         """
         SQL_query_parent = """
-            DELETE FROM documents WHERE document_id = ?
+            DELETE FROM documents WHERE document_id = ? AND user_id = ?
         """
 
         cursor.execute(SQL_query_child, (document_id,))
-        cursor.execute(SQL_query_parent, (document_id,))
+        cursor.execute(SQL_query_parent, (document_id, user_id))
         conn.commit()
         conn.close()
 
-        vectorstore.delete(where={'document_id': document_id})
+        vectorstore.delete(
+               where={
+               'document_id': document_id,
+               'user_id': user_id
+               }
+            )
 
 
-def document_exists(filename):
+def document_exists(user_id: int, filename: str):
 
-    conn = sqlite3.connect("research_assistant.db")
+    conn = get_connection()
     cursor = conn.cursor()
 
     SQL_query = """
         SELECT document_id
         FROM documents
-        WHERE filename = ?
+        WHERE user_id = ?
+        AND filename = ?
     """
 
-    cursor.execute(SQL_query, (filename,))
+    cursor.execute(SQL_query, (user_id, filename))
 
     row = cursor.fetchone()
 
@@ -214,8 +225,55 @@ def document_exists(filename):
 
     return row is not None       
 
-        
+def username_exists(username: str) -> bool:
 
+       conn = get_connection()
+       cursor = conn.cursor()
+
+       SQL_query = """
+            SELECT id FROM users WHERE username = ?
+        """
+
+       cursor.execute(SQL_query, (username,))
+       rows = cursor.fetchone()
+       conn.close()
+       return rows is not None
+
+def create_user(username: str, hashed_password: str):
+
+       conn = get_connection()
+       cursor = conn.cursor()
+       SQL_query = """  
+            INSERT INTO users (username, password_hash) VALUES (?, ?)
+        """
+
+       cursor.execute(SQL_query, (username, hashed_password))
+       conn.commit()
+       conn.close()
+
+def get_user_by_username(username: str):
+
+       conn = get_connection()
+       cursor = conn.cursor()
+       SQL_query = """  
+            SELECT id, username, password_hash FROM users WHERE username = ?
+        """
+
+       cursor.execute(SQL_query, (username,))
+       rows = cursor.fetchone()
+       if rows is None:
+              return None
+
+       conn.close()
+
+       return {
+              'user_id': rows[0],
+              'username': rows[1],
+              'password_hash': rows[2]
+       }
+
+
+       
         
 
 

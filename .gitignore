@@ -1,28 +1,54 @@
-# Virtual environments
+# -----------------------------
+# Virtual Environments
+# -----------------------------
 venv/
 .venv/
+env/
 
-# Python cache
+# -----------------------------
+# Python Cache
+# -----------------------------
 __pycache__/
 *.py[cod]
+*.pyo
+*.pyd
 
-# Environment variables
+# -----------------------------
+# Environment Variables
+# -----------------------------
 .env
 
+# -----------------------------
 # Databases
+# -----------------------------
 *.db
 
-# Chroma Vector Store
+# -----------------------------
+# Vector Databases
+# -----------------------------
 chroma_db/
 vectorstore/
 
-# IDE
+# -----------------------------
+# Uploaded Documents (optional)
+# -----------------------------
+documents/
+
+# -----------------------------
+# IDE Files
+# -----------------------------
 .vscode/
 .idea/
 
+# -----------------------------
 # Jupyter
+# -----------------------------
 .ipynb_checkpoints/
 
-# OS files
+# -----------------------------
+# Operating System Files
+# -----------------------------
 .DS_Store
 Thumbs.db
+
+RAG_vectorstore_db/

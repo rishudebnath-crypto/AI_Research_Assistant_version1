@@ -24,10 +24,7 @@ vectorstore = Chroma(
     collection_name='research_papers'
 )
 
-retriever = MultiQueryRetriever.from_llm(
-    retriever=vectorstore.as_retriever(search_kwargs={'k':10}, search_type='similarity'),
-    llm=llm
-)
+
 
 prompt = ChatPromptTemplate.from_messages([
     (
@@ -69,10 +66,14 @@ Page: {doc.metadata['page'] + 1}
 
     return "\n\n------------------\n\n".join(formatted)
 
-
 chain = prompt | llm | parser
 
-def get_response(user_input: str):
+def get_response(user_id: int, user_input: str):
+
+    retriever = MultiQueryRetriever.from_llm(
+    retriever=vectorstore.as_retriever(search_kwargs={'k':10, 'filter': {'user_id': user_id}}, search_type='similarity'),
+    llm=llm
+    )
 
     chunks = retriever.invoke(user_input)
     context = format_docs(chunks)
@@ -85,8 +86,8 @@ def get_response(user_input: str):
             seen.add(citation)
             citations.append({'Filename': citation[0], 'Page Number': citation[1]})
 
-    response = chain.invoke({'question': user_input, 'context': context, 'chat_history': load_chat_history(None)})
-    save_chat_history(user_input, response)
+    response = chain.invoke({'question': user_input, 'context': context, 'chat_history': load_chat_history(user_id)})
+    save_chat_history(user_id, user_input, response)
     return {'response': response, 'citations': citations}
 
 
