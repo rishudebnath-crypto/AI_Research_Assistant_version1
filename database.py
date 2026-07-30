@@ -198,11 +198,13 @@ def delete_document(user_id: int, document_id):
         conn.close()
 
         vectorstore.delete(
-               where={
-               'document_id': document_id,
-               'user_id': user_id
-               }
-            )
+    where={
+        "$and": [
+            {"document_id": document_id},
+            {"user_id": user_id}
+            ]
+        }
+        )
 
 
 def document_exists(user_id: int, filename: str):
