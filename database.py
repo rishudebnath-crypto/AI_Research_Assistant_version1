@@ -35,17 +35,83 @@ def get_connection():
     conn.execute("PRAGMA foreign_keys = ON")
     return conn
 
+def create_projects(user_id: int, project_name: str) -> int:
+
+       conn = get_connection()
+       cursor = conn.cursor()
+
+       SQL_query = """
+            INSERT INTO projects (project_name, user_id) VALUES (?, ?)
+        """
+
+       cursor.execute(SQL_query, (project_name, user_id))
+       conn.commit()
+ 
+       project_id = cursor.lastrowid
+       conn.close()
+       return project_id
+
+def get_projects(user_id: int):
+
+       conn = get_connection()
+       cursor = conn.cursor()
+
+       SQL_query = """
+            SELECT project_id, project_name FROM projects WHERE user_id = ? ORDER BY created_at DESC
+        """
+
+       cursor.execute(SQL_query, (user_id,))
+       rows = cursor.fetchall()
+       projects = []
+       for row in rows:
+              projects.append({
+                     'project_id': row[0],
+                     'project_name': row[1]
+              })
+
+       conn.close()
+       return projects
+
+def delete_project(project_id: int, user_id: int):
+
+       conn = get_connection()
+       cursor = conn.cursor()
+
+       SQL_query1 = """
+            SELECT filepath FROM documents WHERE project_id = ?
+        """
+
+       cursor.execute(SQL_query1, (project_id,))
+       files = cursor.fetchall()
+
+       for (filepath,) in files:
+              if os.path.exists(filepath):
+                     os.remove(filepath)
+
+       vectorstore.delete(
+              where = {
+                     'project_id': project_id
+              }
+       ) 
+       SQL_query2 = """
+            DELETE FROM projects WHERE project_id = ? AND user_id = ?
+        """
+
+       cursor.execute(SQL_query2, (project_id, user_id))
+       conn.commit()
+       conn.close()
+
 # saving pdf filename and path into documents table and filepath in documents folder
-async def save_pdf_file(file: UploadFile, user_id: int):
+async def save_pdf_file(file: UploadFile, project_id: int):
         filename = file.filename
         conn = get_connection()
         cursor = conn.cursor()
 
         SQL_query1 = """
-            INSERT INTO documents (user_id, filename, filepath) VALUES (?, ?, ?)
+            INSERT INTO documents (project_id, filename, filepath) VALUES (?, ?, ?)
         """
 
-        cursor.execute(SQL_query1, (user_id, filename, ""))
+        cursor.execute(SQL_query1, (project_id, filename, ""))
         document_id = cursor.lastrowid
 
         filepath = f'documents/{document_id}.pdf'
@@ -54,23 +120,23 @@ async def save_pdf_file(file: UploadFile, user_id: int):
                         pdf.write(await file.read())
 
         SQL_query2 = """
-            UPDATE documents SET filepath = ? WHERE document_id = ? AND user_id = ?
+            UPDATE documents SET filepath = ? WHERE document_id = ? AND project_id = ?
         """
 
-        cursor.execute(SQL_query2, (filepath, document_id, user_id))
+        cursor.execute(SQL_query2, (filepath, document_id, project_id))
         conn.commit()
         conn.close()
 
         return document_id, filepath, filename
 
-def load_and_chunk_pdf_file(user_id, document_id, filepath, filename) -> List[Document]:
+def load_and_chunk_pdf_file(project_id, document_id, filepath, filename) -> List[Document]:
 
     loader = PyPDFLoader(filepath)
     docs = loader.load()
     for doc in docs:
             doc.metadata['filename'] = filename
             doc.metadata['document_id'] = document_id
-            doc.metadata['user_id'] = user_id
+            doc.metadata['project_id'] = project_id
 
     splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
     chunks = splitter.split_documents(docs)
@@ -80,13 +146,13 @@ def load_and_chunk_pdf_file(user_id, document_id, filepath, filename) -> List[Do
            chunk.metadata['chunk_index'] = i
            page_number = chunk.metadata.get('page', -1)
            chunk_text = chunk.page_content
-           row = (document_id, user_id, page_number, i, chunk_text)
+           row = (document_id, page_number, i, chunk_text)
            values.append(row)
 
     conn = get_connection()
     cursor = conn.cursor()
     SQL_query = """
-        INSERT INTO chunks (document_id, user_id, page_number, chunk_index, chunk_text) VALUES (?, ?, ?, ?, ?)
+        INSERT INTO chunks (document_id, page_number, chunk_index, chunk_text) VALUES (?, ?, ?, ?)
     """
 
     cursor.executemany(SQL_query, values)
@@ -98,16 +164,16 @@ def update_vectorstore(chunks: List[Document]):
 
        vectorstore.add_documents(chunks)
 
-def load_chat_history(user_id: int):
+def load_chat_history(project_id: int):
 
        history = []
        conn = get_connection()
        cursor = conn.cursor()
        SQL_query = """
-            SELECT role, message FROM chat_history WHERE user_id = ? ORDER BY message_id
+            SELECT role, message FROM chat_history WHERE project_id = ? ORDER BY message_id
         """
 
-       cursor.execute(SQL_query, (user_id,))
+       cursor.execute(SQL_query, (project_id,))
        rows = cursor.fetchall()
 
        for role, message in rows:
@@ -121,14 +187,14 @@ def load_chat_history(user_id: int):
        conn.close() 
        return history
 
-def get_chat_history(user_id: int):
+def get_chat_history(project_id: int):
 
         conn = get_connection()
         cursor = conn.cursor()
         SQL_query = """
-            SELECT role, message FROM chat_history WHERE user_id = ? ORDER BY message_id
+            SELECT role, message FROM chat_history WHERE project_id = ? ORDER BY message_id
         """
-        cursor.execute(SQL_query, (user_id,))
+        cursor.execute(SQL_query, (project_id,))
         rows = cursor.fetchall()
         history = []
         for row in rows:
@@ -141,41 +207,41 @@ def get_chat_history(user_id: int):
         conn.close()
         return history
 
-def save_chat_history(user_id: int, user_input: str, ai: str) -> None:
+def save_chat_history(project_id: int, user_input: str, ai: str) -> None:
 
-       rows = [(user_id, 'user', user_input), (user_id, 'ai', ai)]
+       rows = [(project_id, 'user', user_input), (project_id, 'ai', ai)]
        conn = get_connection()
        cursor = conn.cursor()
        SQL_query = """
-            INSERT INTO chat_history (user_id, role, message) VALUES (?, ?, ?)
+            INSERT INTO chat_history (project_id, role, message) VALUES (?, ?, ?)
         """   
 
        cursor.executemany(SQL_query, rows)
        conn.commit()
        conn.close() 
 
-def get_documents(user_id: int):
+def get_documents(project_id: int):
 
         conn = get_connection()
         cursor = conn.cursor()
         SQL_query = """
-            SELECT document_id, filename FROM documents WHERE user_id = ? ORDER BY document_id
+            SELECT document_id, filename FROM documents WHERE project_id = ? ORDER BY document_id
         """    
 
-        cursor.execute(SQL_query, (user_id,))
+        cursor.execute(SQL_query, (project_id,))
         rows = cursor.fetchall()
         conn.close()
         return rows
 
-def delete_document(user_id: int, document_id):
+def delete_document(project_id: int, document_id):
 
         conn = get_connection()
         cursor = conn.cursor()
         SQL_query = """
-            SELECT filepath FROM documents WHERE document_id = ? AND user_id = ?
+            SELECT filepath FROM documents WHERE document_id = ? AND project_id = ?
         """
 
-        cursor.execute(SQL_query, (document_id, user_id))
+        cursor.execute(SQL_query, (document_id, project_id))
         rows = cursor.fetchone()
         if rows is None:
                 conn.close()
@@ -189,11 +255,11 @@ def delete_document(user_id: int, document_id):
             DELETE FROM chunks WHERE document_id = ?
         """
         SQL_query_parent = """
-            DELETE FROM documents WHERE document_id = ? AND user_id = ?
+            DELETE FROM documents WHERE document_id = ? AND project_id = ?
         """
 
         cursor.execute(SQL_query_child, (document_id,))
-        cursor.execute(SQL_query_parent, (document_id, user_id))
+        cursor.execute(SQL_query_parent, (document_id, project_id))
         conn.commit()
         conn.close()
 
@@ -201,13 +267,13 @@ def delete_document(user_id: int, document_id):
     where={
         "$and": [
             {"document_id": document_id},
-            {"user_id": user_id}
+            {"project_id": project_id}
             ]
         }
         )
 
 
-def document_exists(user_id: int, filename: str):
+def document_exists(project_id: int, filename: str):
 
     conn = get_connection()
     cursor = conn.cursor()
@@ -215,11 +281,11 @@ def document_exists(user_id: int, filename: str):
     SQL_query = """
         SELECT document_id
         FROM documents
-        WHERE user_id = ?
+        WHERE project_id = ?
         AND filename = ?
     """
 
-    cursor.execute(SQL_query, (user_id, filename))
+    cursor.execute(SQL_query, (project_id, filename))
 
     row = cursor.fetchone()
 
@@ -264,6 +330,7 @@ def get_user_by_username(username: str):
        cursor.execute(SQL_query, (username,))
        rows = cursor.fetchone()
        if rows is None:
+              conn.close()
               return None
 
        conn.close()
@@ -274,7 +341,26 @@ def get_user_by_username(username: str):
               'password_hash': rows[2]
        }
 
+def verify_project_owner(project_id: int, user_id: int) -> bool:
 
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    SQL_query = """
+        SELECT user_id
+        FROM projects
+        WHERE project_id = ?
+    """
+
+    cursor.execute(SQL_query, (project_id,))
+    row = cursor.fetchone()
+
+    conn.close()
+
+    if row is None:
+        return False
+
+    return row[0] == user_id
        
         
 

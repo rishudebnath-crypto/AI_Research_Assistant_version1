@@ -68,10 +68,10 @@ Page: {doc.metadata['page'] + 1}
 
 chain = prompt | llm | parser
 
-def get_response(user_id: int, user_input: str):
+def get_response(project_id: int, user_input: str):
 
     retriever = MultiQueryRetriever.from_llm(
-    retriever=vectorstore.as_retriever(search_kwargs={'k':10, 'filter': {'user_id': user_id}}, search_type='similarity'),
+    retriever=vectorstore.as_retriever(search_kwargs={'k':10, 'filter': {'project_id': project_id}}, search_type='similarity'),
     llm=llm
     )
 
@@ -86,8 +86,8 @@ def get_response(user_id: int, user_input: str):
             seen.add(citation)
             citations.append({'Filename': citation[0], 'Page Number': citation[1]})
 
-    response = chain.invoke({'question': user_input, 'context': context, 'chat_history': load_chat_history(user_id)})
-    save_chat_history(user_id, user_input, response)
+    response = chain.invoke({'question': user_input, 'context': context, 'chat_history': load_chat_history(project_id)})
+    save_chat_history(project_id, user_input, response)
     return {'response': response, 'citations': citations}
 
 
