@@ -11,7 +11,8 @@ from api import (
     get_chat_history,
     delete_chat,
     delete_document,
-    delete_project
+    delete_project,
+    generate_flashcard
 )
 
 from auth import save_token, get_token, logout
@@ -119,6 +120,10 @@ else:
                     )
 
                     st.session_state.messages = []
+                    st.session_state.pop("flashcard_question", None)
+                    st.session_state.pop("flashcard_answer", None)
+                    st.session_state.pop("flashcard_answer_visible", None)
+                    st.session_state.pop("flashcard_window_number", None)
 
                     if history_response.status_code == 200:
 
@@ -178,6 +183,10 @@ else:
                     st.success("Project deleted!")
                     st.session_state.pop("selected_project", None)
                     st.session_state.messages = []
+                    st.session_state.pop("flashcard_question", None)
+                    st.session_state.pop("flashcard_answer", None)
+                    st.session_state.pop("flashcard_answer_visible", None)
+                    st.session_state.pop("flashcard_window_number", None)
                     st.rerun()
                 else:
                     st.error(response.json()["detail"])
@@ -234,6 +243,137 @@ else:
                                 st.rerun()
                             else:
                                 st.error(r.json()["detail"])
+
+        st.write("---")
+
+        # ---------------- FLASHCARDS ---------------- #
+
+        st.subheader("🧠 Flashcards")
+
+        flashcard_document_options = {
+            document["filename"]: document["document_ID"]
+            for document in documents
+        }
+
+        if flashcard_document_options:
+
+            selected_flashcard_filename = st.selectbox(
+                "Choose a document",
+                list(flashcard_document_options.keys()),
+                key="flashcard_document"
+            )
+
+            selected_flashcard_document_id = flashcard_document_options[
+                selected_flashcard_filename
+            ]
+
+            if st.button(
+                "✨ Generate Flashcard",
+                key="generate_flashcard"
+            ):
+
+                with st.spinner("Generating flashcard..."):
+
+                    flashcard_response = generate_flashcard(
+                        token,
+                        project["project_id"],
+                        selected_flashcard_document_id
+                    )
+
+                if flashcard_response.status_code == 200:
+
+                    flashcard_data = flashcard_response.json()
+
+                    st.session_state.flashcard_question = (
+                        flashcard_data["flashcard"]["question"]
+                    )
+
+                    st.session_state.flashcard_window_number = (
+                        flashcard_data["window number"]
+                    )
+                    st.session_state.flashcard_answer = (
+                        flashcard_data["flashcard"]["answer"]
+                    )
+                    st.session_state.flashcard_answer_visible = False
+
+                else:
+
+                    st.error(
+                        flashcard_response.json().get(
+                            "detail",
+                            "Failed to generate flashcard."
+                        )
+                    )
+
+            if "flashcard_question" in st.session_state:
+
+                st.markdown("### Question")
+                if "flashcard_window_number" in st.session_state:
+                    st.caption(
+                        f"Source window: {st.session_state.flashcard_window_number}"
+                    )
+                st.write(st.session_state.flashcard_question)
+
+                if not st.session_state.get(
+                    "flashcard_answer_visible",
+                    False
+                ):
+
+                    if st.button(
+                        "👁️ Show Answer",
+                        key="show_answer_button"
+                    ):
+                        st.session_state.flashcard_answer_visible = True
+                        st.rerun()
+
+                else:
+
+                    st.markdown("### Answer")
+                    st.write(st.session_state.flashcard_answer)
+
+                    if st.button(
+                        "🔄 Generate Another",
+                        key="generate_another_flashcard"
+                    ):
+
+                        with st.spinner(
+                            "Generating another flashcard..."
+                        ):
+
+                            flashcard_response = generate_flashcard(
+                                token,
+                                project["project_id"],
+                                selected_flashcard_document_id
+                            )
+
+                        if flashcard_response.status_code == 200:
+
+                            flashcard_data = flashcard_response.json()
+
+                            st.session_state.flashcard_question = (
+                                flashcard_data["flashcard"]["question"]
+                            )
+
+                            st.session_state.flashcard_window_number = (
+                                flashcard_data["window number"]
+                            )
+                            st.session_state.flashcard_answer = (
+                                flashcard_data["flashcard"]["answer"]
+                            )
+                            st.session_state.flashcard_answer_visible = False
+                            st.rerun()
+
+                        else:
+
+                            st.error(
+                                flashcard_response.json().get(
+                                    "detail",
+                                    "Failed to generate flashcard."
+                                )
+                            )
+
+        else:
+            st.info("Upload a document to generate flashcards.")
 
         st.write("---")
 

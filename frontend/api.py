@@ -177,3 +177,23 @@ def delete_project(token: str, project_id: int):
     )
 
     return response
+
+def generate_flashcard(
+    token: str,
+    project_id: int,
+    document_id: int
+):
+
+    headers = {
+        "Authorization": f"Bearer {token}"
+    }
+
+    response = requests.post(
+        f"{API_URL}/documents/{document_id}/flashcard",
+        params={
+            "project_id": project_id
+        },
+        headers=headers
+    )
+
+    return response

@@ -52,3 +52,6 @@ documents/
 Thumbs.db
 
 RAG_vectorstore_db/
+
+# Generated reports
+generated_reports/

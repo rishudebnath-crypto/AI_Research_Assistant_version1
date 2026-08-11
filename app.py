@@ -1,11 +1,15 @@
 from fastapi import FastAPI, UploadFile, File, HTTPException, Depends
+from fastapi.responses import FileResponse
 from RAG import get_response
 from pydantic import BaseModel, Field
 import sqlite3
-from database import load_chat_history, save_chat_history, load_and_chunk_pdf_file, save_pdf_file, update_vectorstore, get_chat_history, get_documents, delete_document, document_exists, create_user, username_exists, get_user_by_username, get_connection, create_projects, get_projects, delete_project, verify_project_owner
+from database import load_chat_history, save_chat_history, load_and_chunk_pdf_file, save_pdf_file, update_vectorstore, get_chat_history, get_documents, delete_document, document_exists, create_user, username_exists, get_user_by_username, get_connection, create_projects, get_projects, delete_project, verify_project_owner, document_belongs_to_project, summary_exists, get_summary, save_summary
 from auth import hash_password, verify_password, create_access_token, get_current_user
 from fastapi.security import OAuth2PasswordRequestForm
-from typing import Annotated
+from typing import Annotated, Literal
+from content_generator import generate_summary, generate_flashcard, generate_quiz
+from schemas import PaperSummary
+from pdf_generator import generate_summary_pdf
 
 app = FastAPI()
 
@@ -13,6 +17,10 @@ class User(BaseModel):
 
        username: str
        password: str
+
+class SummaryLength(BaseModel):
+
+       summary_length: Annotated[Literal['short', 'long', 'medium'], Field(..., description='Determine the overall length of summary you would prefer')]
 
 @app.get('/', description='might be mapped to homme page later')
 def root():
@@ -201,3 +209,106 @@ def delete_docss(project_id: int, current_user: Annotated[dict, Depends(get_curr
       delete_document(project_id, document_id)
       return {'message': 'Document deleted succesfully!'}
 
+@app.post('/summary', description='Generate the summary of the PDF file')
+def generate_document_summary(project_id: int, document_id: int, summary_length: SummaryLength, current_user: Annotated[dict, Depends(get_current_user)]):
+
+       user_id = current_user['user_id']
+       if not verify_project_owner(project_id, user_id):
+
+              raise HTTPException(
+                     status_code=403,
+                     detail='Unauthorized access'
+              )
+
+       if not document_belongs_to_project(project_id, document_id):
+
+              raise HTTPException(
+                     status_code=404,
+                     detail='Document not found'
+              )
+
+       if summary_exists(document_id, summary_length.summary_length):
+              summary = get_summary(document_id, summary_length.summary_length)
+              return summary
+       
+       summary = generate_summary(document_id, summary_length.summary_length)
+       save_summary(document_id, summary_length.summary_length, summary)
+       return summary
+
+@app.get('/summary/pdf', description='Download the entire summary report generated as a PDF file')
+def get_download_pdf(current_user: Annotated[dict, Depends(get_current_user)], project_id: int, document_id: int, summary_length: Literal['short', 'long', 'medium']):
+
+       user_id = current_user['user_id']
+       if not verify_project_owner(project_id, user_id):
+              raise HTTPException(
+                     status_code=403,
+                     detail='Unauthorized access'
+              )
+
+       if not document_belongs_to_project(project_id, document_id):
+              raise HTTPException(
+                     status_code=404,
+                     detail='Document not found'
+              )
+       if not summary_exists(document_id, summary_length):
+
+              raise HTTPException(
+                     status_code=404,
+                     detail="Summary has not been generated yet."
+              )
+       
+       summary = get_summary(document_id, summary_length)
+       filepath = generate_summary_pdf(summary, document_id, summary_length)
+
+       return FileResponse(
+              path=filepath,
+              media_type='application/pdf',
+              filename=f"summary_{document_id}_{summary_length}.pdf"
+       )
+
+@app.post('/documents/{document_id}/flashcard', description='Generate random flashcard from the paper')
+def generate_document_flashcard(current_user: Annotated[dict, Depends(get_current_user)], project_id: int, document_id: int):
+
+       user_id = current_user['user_id']
+       if not verify_project_owner(project_id, user_id):
+              raise HTTPException(
+                     status_code=403,
+                     detail='Unauthorized access'
+              )
+
+       if not document_belongs_to_project(project_id, document_id):
+              raise HTTPException(
+                     status_code=404,
+                     detail='Document not found'
+              )
+
+       return generate_flashcard(document_id)
+
+@app.post(
+    "/documents/{document_id}/quiz",
+    description="Generate a quiz from the paper"
+)
+def generate_document_quiz(
+    current_user: Annotated[dict, Depends(get_current_user)],
+    project_id: int,
+    document_id: int,
+    number_of_questions: int = 5
+):
+    user_id = current_user["user_id"]
+
+    if not verify_project_owner(project_id, user_id):
+        raise HTTPException(
+            status_code=403,
+            detail="Unauthorized access"
+        )
+
+    if not document_belongs_to_project(project_id, document_id):
+        raise HTTPException(
+            status_code=404,
+            detail="Document not found"
+        )
+
+    return generate_quiz(
+        document_id,
+        number_of_questions
+    )

@@ -5,6 +5,7 @@ from langchain_classic.text_splitter import RecursiveCharacterTextSplitter
 from langchain_core.messages import HumanMessage, AIMessage
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_groq import ChatGroq
+from schemas import PaperSummary
 from langchain_community.vectorstores import Chroma
 from dotenv import load_dotenv
 import sqlite3
@@ -362,10 +363,167 @@ def verify_project_owner(project_id: int, user_id: int) -> bool:
 
     return row[0] == user_id
        
+def get_document_chunks(document_id: int) -> List[str]:
+
+       conn = get_connection()
+       cursor = conn.cursor()
+
+       SQL_query = """
+            SELECT chunk_text FROM chunks WHERE document_id = ? ORDER BY chunk_index ASC
+        """ 
+
+       cursor.execute(SQL_query, (document_id,))
+       rows = cursor.fetchall()
+       conn.close()
+       return [row[0] for row in rows]  
+
+def document_belongs_to_project(project_id: int, document_id: int) -> bool:
+
+       conn = get_connection()
+       cursor = conn.cursor()
+
+       SQL_query = """
+            SELECT project_id FROM documents WHERE document_id = ?
+        """
+
+       cursor.execute(SQL_query, (document_id,))
+       row = cursor.fetchone()
+       conn.close() 
+
+       if row is None:
+              return False
+       
+       return row[0] == project_id
         
+def summary_exists(document_id: int, summary_length: str) -> bool:
 
+       conn = get_connection()
+       cursor = conn.cursor()
 
-        
-        
+       SQL_query = """
+            SELECT summary_json FROM summaries WHERE document_id = ? AND summary_length = ?
+        """
+       cursor.execute(SQL_query, (document_id, summary_length))
+       row = cursor.fetchone()
+       conn.close()
+       return row is not None
 
+def save_summary(document_id: int, summary_length: str, summary: PaperSummary) -> None:
 
+       conn = get_connection()
+       cursor = conn.cursor()
+
+       SQL_query = """
+            INSERT INTO summaries (document_id, summary_length, summary_json) VALUES (?, ?, ?)
+        """
+
+       cursor.execute(SQL_query, (document_id, summary_length, summary.model_dump_json()))
+       conn.commit()
+       conn.close()
+
+def get_summary(document_id: int, summary_length: str) -> PaperSummary:
+
+       conn = get_connection()
+       cursor = conn.cursor()
+
+       SQL_query = """
+            SELECT summary_json FROM summaries WHERE document_id = ? AND summary_length = ?
+        """
+
+       cursor.execute(SQL_query, (document_id, summary_length))
+       row = cursor.fetchone()
+       conn.close()
+       if row is None:
+              raise ValueError('Summary not found')
+       
+       summary = PaperSummary.model_validate_json(row[0])
+       return summary
+
+def local_summary_exists(document_id: int, window_number: int) -> bool:
+
+       conn = get_connection()
+       cursor = conn.cursor()
+
+       SQL_query = """
+            SELECT local_summary FROM local_summaries WHERE document_id = ? AND window_number = ?
+        """
+
+       cursor.execute(SQL_query, (document_id, window_number))
+       row = cursor.fetchone()
+       conn.close()
+
+       return row is not None
+
+def save_local_summary(document_id: int, window_number: int, local_summary: str):
+
+       conn = get_connection()
+       cursor = conn.cursor()
+
+       SQL_query = """
+            INSERT INTO local_summaries (document_id, window_number, local_summary) VALUES (?, ?, ?)
+        """
+
+       cursor.execute(SQL_query, (document_id, window_number, local_summary))
+       conn.commit()
+       conn.close()
+
+def get_local_summary(document_id: int, window_number: int) -> str:
+
+       conn = get_connection()
+       cursor = conn.cursor()
+
+       SQL_query = """
+            SELECT local_summary FROM local_summaries WHERE document_id = ? AND window_number = ?
+        """
+
+       cursor.execute(SQL_query, (document_id, window_number))
+       row = cursor.fetchone()
+       conn.close()
+       if row is None:
+              raise ValueError('Local Summary not found')
+       
+       return row[0]
+
+def merged_summary_exists(document_id: int):
+
+       conn = get_connection()
+       cursor = conn.cursor()
+
+       SQL_query = """
+            SELECT merged_summary FROM merged_summaries WHERE document_id = ?
+        """
+       cursor.execute(SQL_query, (document_id,))
+       row = cursor.fetchone()
+       conn.close()
+       return row is not None
+
+def save_merged_summary(document_id: int, merged_summary: str):
+
+       conn = get_connection()
+       cursor = conn.cursor()
+
+       SQL_query = """
+            INSERT INTO merged_summaries (document_id, merged_summary) VALUES (?, ?)
+        """
+
+       cursor.execute(SQL_query, (document_id, merged_summary))
+       conn.commit()
+       conn.close()
+
+def get_merged_summary(document_id: int) -> str:
+
+       conn = get_connection()
+       cursor = conn.cursor()
+
+       SQL_query = """
+            SELECT merged_summary FROM merged_summaries WHERE document_id = ?
+        """
+
+       cursor.execute(SQL_query, (document_id,))
+       row = cursor.fetchone()
+       conn.close()
+
+       if row is None:
+              raise ValueError('Merged summary not found')
+       
+       return row[0]
