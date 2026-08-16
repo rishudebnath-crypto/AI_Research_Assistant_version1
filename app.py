@@ -1,5 +1,5 @@
 from fastapi import FastAPI, UploadFile, File, HTTPException, Depends
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from RAG import get_response
 from pydantic import BaseModel, Field
 import sqlite3
@@ -10,6 +10,7 @@ from typing import Annotated, Literal
 from content_generator import generate_summary, generate_flashcard, generate_quiz
 from schemas import PaperSummary
 from pdf_generator import generate_summary_pdf
+
 
 app = FastAPI()
 
@@ -312,3 +313,4 @@ def generate_document_quiz(
         document_id,
         number_of_questions
     )
+

@@ -53,3 +53,4 @@ class QuizQuestion(BaseModel):
     correct_answer: str = Field(description='Provide the correct answer which must exactly match with one of the 4 provided options.')
 
     explanation: str = Field(description='Explain why the correct answer is supported by the provided research paper section')
+

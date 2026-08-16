@@ -197,3 +197,25 @@ def generate_flashcard(
     )
 
     return response
+
+def generate_quiz(
+    token: str,
+    project_id: int,
+    document_id: int,
+    number_of_questions: int = 5
+):
+
+    headers = {
+        "Authorization": f"Bearer {token}"
+    }
+
+    response = requests.post(
+        f"{API_URL}/documents/{document_id}/quiz",
+        params={
+            "project_id": project_id,
+            "number_of_questions": number_of_questions
+        },
+        headers=headers
+    )
+
+    return response

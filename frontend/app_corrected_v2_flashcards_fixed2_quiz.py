@@ -1,6 +1,6 @@
 import streamlit as st
 
-from api import (
+from api_updated_quiz import (
     login,
     register,
     create_project,
@@ -12,7 +12,8 @@ from api import (
     delete_chat,
     delete_document,
     delete_project,
-    generate_flashcard
+    generate_flashcard,
+    generate_quiz
 )
 
 from auth import save_token, get_token, logout
@@ -124,6 +125,9 @@ else:
                     st.session_state.pop("flashcard_answer", None)
                     st.session_state.pop("flashcard_answer_visible", None)
                     st.session_state.pop("flashcard_window_number", None)
+                    st.session_state.pop("quiz_questions", None)
+                    st.session_state.pop("quiz_document_id", None)
+                    st.session_state.pop("quiz_document_name", None)
 
                     if history_response.status_code == 200:
 
@@ -187,6 +191,9 @@ else:
                     st.session_state.pop("flashcard_answer", None)
                     st.session_state.pop("flashcard_answer_visible", None)
                     st.session_state.pop("flashcard_window_number", None)
+                    st.session_state.pop("quiz_questions", None)
+                    st.session_state.pop("quiz_document_id", None)
+                    st.session_state.pop("quiz_document_name", None)
                     st.rerun()
                 else:
                     st.error(response.json()["detail"])
@@ -375,7 +382,127 @@ else:
         else:
             st.info("Upload a document to generate flashcards.")
 
+
         st.write("---")
+
+        # ---------------- QUIZZES ---------------- #
+
+        st.subheader("📝 Quiz")
+
+        quiz_document_options = {
+            document["filename"]: document["document_ID"]
+            for document in documents
+        }
+
+        if quiz_document_options:
+
+            selected_quiz_filename = st.selectbox(
+                "Choose a document",
+                list(quiz_document_options.keys()),
+                key="quiz_document"
+            )
+
+            selected_quiz_document_id = quiz_document_options[
+                selected_quiz_filename
+            ]
+
+            number_of_questions = st.number_input(
+                "Number of questions",
+                min_value=1,
+                max_value=20,
+                value=5,
+                step=1,
+                key="quiz_number_of_questions"
+            )
+
+            if st.button(
+                "✨ Generate Quiz",
+                key="generate_quiz"
+            ):
+
+                with st.spinner("Generating quiz..."):
+
+                    quiz_response = generate_quiz(
+                        token,
+                        project["project_id"],
+                        selected_quiz_document_id,
+                        number_of_questions
+                    )
+
+                if quiz_response.status_code == 200:
+
+                    st.session_state.quiz_questions = (
+                        quiz_response.json()
+                    )
+
+                    st.session_state.quiz_document_id = (
+                        selected_quiz_document_id
+                    )
+
+                    st.session_state.quiz_document_name = (
+                        selected_quiz_filename
+                    )
+
+                    st.rerun()
+
+                else:
+
+                    st.error(
+                        quiz_response.json().get(
+                            "detail",
+                            "Failed to generate quiz."
+                        )
+                    )
+
+            # Display the currently generated quiz.
+            if "quiz_questions" in st.session_state:
+
+                st.markdown("### Generated Quiz")
+
+                for question_number, item in enumerate(
+                    st.session_state.quiz_questions,
+                    start=1
+                ):
+
+                    quiz_question = item["quiz_question"]
+
+                    st.markdown(
+                        f"**Question {question_number}:** "
+                        f"{quiz_question['question']}"
+                    )
+
+                    for option_number, option in enumerate(
+                        quiz_question["options"]
+                    ):
+
+                        option_letter = chr(
+                            ord("A") + option_number
+                        )
+
+                        st.write(
+                            f"**{option_letter}.** {option}"
+                        )
+
+                    if st.button(
+                        f"Show Answer {question_number}",
+                        key=f"show_quiz_answer_{question_number}"
+                    ):
+
+                        st.success(
+                            f"Correct Answer: "
+                            f"{quiz_question['correct_answer']}"
+                        )
+
+                        st.info(
+                            f"Explanation: "
+                            f"{quiz_question['explanation']}"
+                        )
+
+                    st.write("")
+
+        else:
+
+            st.info("Upload a document to generate a quiz.")
 
         left, right = st.columns([6,1])
 
