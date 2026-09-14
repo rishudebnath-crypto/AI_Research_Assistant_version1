@@ -7,6 +7,7 @@ from dotenv import load_dotenv
 from langchain_community.vectorstores import Chroma
 from langchain_classic.retrievers import MultiQueryRetriever
 from database import load_chat_history, save_chat_history
+import os
 
 load_dotenv()
 
@@ -20,7 +21,7 @@ parser = StrOutputParser()
 
 vectorstore = Chroma(
     embedding_function=embedding_model,
-    persist_directory='RAG_vectorstore_db',
+    persist_directory=os.path.join('data', 'RAG_vectorstore_db'),
     collection_name='research_papers'
 )
 

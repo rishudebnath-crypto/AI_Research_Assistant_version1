@@ -49,11 +49,12 @@ def add_section(
 def generate_summary_pdf(summary: PaperSummary, document_id: int, summary_length: str) -> str:
 
     os.makedirs(
-        'generated_reports', 
+        os.path.join('data', 'generated_reports'), 
         exist_ok=True
     )
 
     pdf_path = os.path.join(
+        'data',
         'generated_reports',
         f'summary_{document_id}_{summary_length}.pdf'
     )

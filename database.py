@@ -13,7 +13,10 @@ from typing import List
 import os
 
 # make a folder "documents" containing all uploaded PDF files if not exists yet
-os.makedirs("documents", exist_ok=True)
+DATA_DIR = "data"
+
+os.makedirs(DATA_DIR, exist_ok=True)
+os.makedirs(os.path.join(DATA_DIR, "documents"), exist_ok=True)
 
 # loading environment variables of LLM API keys
 load_dotenv()
@@ -28,11 +31,11 @@ embedding_model = HuggingFaceEmbeddings(
 # using chroma vector database
 vectorstore = Chroma(
     embedding_function=embedding_model,
-    persist_directory='RAG_vectorstore_db',
+    persist_directory=os.path.join(DATA_DIR, "RAG_vectorstore_db"),
     collection_name='research_papers'
 )
 def get_connection():
-    conn = sqlite3.connect("research_assistant.db")
+    conn = sqlite3.connect(os.path.join(DATA_DIR, "research_assistant.db"))
     conn.execute("PRAGMA foreign_keys = ON")
     return conn
 
@@ -115,7 +118,7 @@ async def save_pdf_file(file: UploadFile, project_id: int):
         cursor.execute(SQL_query1, (project_id, filename, ""))
         document_id = cursor.lastrowid
 
-        filepath = f'documents/{document_id}.pdf'
+        filepath = os.path.join(DATA_DIR, "documents", f"{document_id}.pdf")
 
         with open(filepath, 'wb') as pdf:
                         pdf.write(await file.read())

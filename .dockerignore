@@ -1,0 +1,37 @@
+# Python cache
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Environment variables / secrets
+.env
+.env.*
+
+# Git
+.git/
+.gitignore
+
+# Local application data
+research_assistant.db
+documents/
+RAG_vectorstore_db/
+generated_reports/
+
+data/
+
+# Frontend
+frontend/
+
+# Jupyter / development files
+.ipynb_checkpoints/
+
+# OS/editor files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
