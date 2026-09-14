@@ -10,7 +10,7 @@ from database import load_chat_history, save_chat_history
 
 load_dotenv()
 
-llm = ChatGroq(model='llama-3.3-70b-versatile')
+llm = ChatGroq(model='openai/gpt-oss-120b')
 
 embedding_model = HuggingFaceEmbeddings(
     model_name="sentence-transformers/all-MiniLM-L6-v2"

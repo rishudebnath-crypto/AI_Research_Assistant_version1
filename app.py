@@ -293,7 +293,8 @@ def generate_document_quiz(
     current_user: Annotated[dict, Depends(get_current_user)],
     project_id: int,
     document_id: int,
-    number_of_questions: int = 5
+    number_of_questions: int = 5,
+    difficulty: Literal['easy', 'medium', 'tough'] = 'medium'
 ):
     user_id = current_user["user_id"]
 
@@ -311,6 +312,7 @@ def generate_document_quiz(
 
     return generate_quiz(
         document_id,
-        number_of_questions
+        number_of_questions,
+        difficulty
     )
 

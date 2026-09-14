@@ -15,7 +15,7 @@ load_dotenv()
 llm1 = ChatGroq(model='openai/gpt-oss-20b', temperature=0)
 llm2 = ChatGroq(model='openai/gpt-oss-120b', temperature=0)
 llm3 = ChatGroq(model='qwen/qwen3.6-27b', temperature=0)
-llm4 = ChatGroq(model='llama-3.3-70b-versatile')
+llm4 = ChatGroq(model='openai/gpt-oss-120b')
 
 SUMMARY_WINDOW_SIZE = 4
 MERGE_SUMMARY_WINDOW_SIZE = 2
@@ -85,6 +85,41 @@ Research Paper Section:
     )
 ])
 
+QUIZ_DIFFICULTY_INSTRUCTIONS = {
+    "easy": """
+Generate a relatively easy question.
+
+Focus on direct understanding, important definitions,
+basic concepts, or clearly stated facts from the
+provided research paper section.
+
+Avoid questions requiring multiple steps of reasoning.
+""",
+
+    "medium": """
+Generate a moderately challenging question.
+
+Require the reader to interpret, connect, or apply
+important information from the provided research paper
+section.
+
+The question may involve methodology, results,
+observations, or relationships between concepts.
+""",
+
+    "tough": """
+Generate a challenging question.
+
+Require deeper reasoning, interpretation, comparison,
+mathematical reasoning, or multi-step analysis using
+information from the provided research paper section.
+
+The question should be difficult even for someone who
+has only memorized the text, while remaining completely
+answerable from the provided section.
+"""
+}
+
 quiz_prompt = ChatPromptTemplate.from_messages([
     (
         "system",
@@ -93,6 +128,9 @@ You are an expert AI Research Assistant.
 
 Your task is to generate exactly ONE high-quality multiple-choice
 quiz question from the provided section of a research paper.
+
+Difficulty level:
+{difficulty_instruction}
 
 Requirements:
 
@@ -103,7 +141,6 @@ Requirements:
 - Base the question entirely on the provided research paper section.
 - Focus on an important concept, methodology, mathematical idea,
   experiment, result, or observation.
-- Prefer questions that test understanding rather than trivial recall.
 - The explanation must clearly explain why the correct answer
   is supported by the provided text.
 - Do not use information from outside the provided text.
@@ -430,9 +467,13 @@ def generate_flashcard(document_id: int) -> Flashcard:
 
 def generate_quiz(
     document_id: int,
-    number_of_questions: int = 5
+    number_of_questions: int = 5,
+    difficulty: str = 'medium'
 ):
 
+    if difficulty not in QUIZ_DIFFICULTY_INSTRUCTIONS:
+        raise ValueError('difficulty option must be among "easy", "medium" or "tough"')
+    
     windows = build_chunk_windows(document_id)
 
     if not windows:
@@ -453,7 +494,8 @@ def generate_quiz(
         quiz_question = invoke_with_retry(
             chain=quiz_chain,
             inputs={
-                "text": windows[index]
+                "difficulty_instruction": QUIZ_DIFFICULTY_INSTRUCTIONS[difficulty],
+                "text": windows[index],
             }
         )
 

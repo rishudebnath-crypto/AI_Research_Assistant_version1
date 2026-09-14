@@ -202,7 +202,8 @@ def generate_quiz(
     token: str,
     project_id: int,
     document_id: int,
-    number_of_questions: int = 5
+    number_of_questions: int = 5,
+    difficulty: str = "medium"
 ):
 
     headers = {
@@ -213,7 +214,8 @@ def generate_quiz(
         f"{API_URL}/documents/{document_id}/quiz",
         params={
             "project_id": project_id,
-            "number_of_questions": number_of_questions
+            "number_of_questions": number_of_questions,
+            "difficulty": difficulty
         },
         headers=headers
     )

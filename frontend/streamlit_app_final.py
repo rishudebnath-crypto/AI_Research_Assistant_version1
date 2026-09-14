@@ -1,6 +1,6 @@
 import streamlit as st
 
-from api_updated_quiz import (
+from api_updated_quiz_difficulty import (
     login,
     register,
     create_project,
@@ -415,6 +415,14 @@ else:
                 key="quiz_number_of_questions"
             )
 
+            difficulty = st.selectbox(
+                "Difficulty",
+                ["easy", "medium", "tough"],
+                index=1,
+                format_func=lambda level: level.capitalize(),
+                key="quiz_difficulty"
+            )
+
             if st.button(
                 "✨ Generate Quiz",
                 key="generate_quiz"
@@ -426,7 +434,8 @@ else:
                         token,
                         project["project_id"],
                         selected_quiz_document_id,
-                        number_of_questions
+                        number_of_questions,
+                        difficulty
                     )
 
                 if quiz_response.status_code == 200:
