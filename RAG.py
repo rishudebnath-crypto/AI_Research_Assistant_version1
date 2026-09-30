@@ -11,7 +11,11 @@ import os
 
 load_dotenv()
 
-llm = ChatGroq(model='openai/gpt-oss-120b')
+llm_chat = ChatGroq(model='openai/gpt-oss-120b')
+llm_retrieve = ChatGroq(
+    model="openai/gpt-oss-20b",
+    temperature=0
+)
 
 embedding_model = HuggingFaceEmbeddings(
     model_name="sentence-transformers/all-MiniLM-L6-v2"
@@ -67,13 +71,13 @@ Page: {doc.metadata['page'] + 1}
 
     return "\n\n------------------\n\n".join(formatted)
 
-chain = prompt | llm | parser
+chain = prompt | llm_chat | parser
 
 def get_response(project_id: int, user_input: str):
 
     retriever = MultiQueryRetriever.from_llm(
     retriever=vectorstore.as_retriever(search_kwargs={'k':10, 'filter': {'project_id': project_id}}, search_type='similarity'),
-    llm=llm
+    llm=llm_retrieve
     )
 
     chunks = retriever.invoke(user_input)
@@ -87,7 +91,10 @@ def get_response(project_id: int, user_input: str):
             seen.add(citation)
             citations.append({'Filename': citation[0], 'Page Number': citation[1]})
 
-    response = chain.invoke({'question': user_input, 'context': context, 'chat_history': load_chat_history(project_id)})
+    history = load_chat_history(project_id)
+    history = history[-6:]
+
+    response = chain.invoke({'question': user_input, 'context': context, 'chat_history': history})
     save_chat_history(project_id, user_input, response)
     return {'response': response, 'citations': citations}
 
