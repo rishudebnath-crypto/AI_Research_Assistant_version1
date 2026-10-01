@@ -95,6 +95,8 @@ def get_response(project_id: int, user_input: str):
     history = history[-6:]
 
     response = chain.invoke({'question': user_input, 'context': context, 'chat_history': history})
+    print("RAW LLM RESPONSE")
+    print(repr(response))
     save_chat_history(project_id, user_input, response)
     return {'response': response, 'citations': citations}
 
