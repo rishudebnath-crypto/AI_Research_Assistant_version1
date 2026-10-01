@@ -1,5 +1,31 @@
 import streamlit as st
 
+import re
+
+
+def normalize_latex_delimiters(text):
+    """Convert LaTeX math delimiters to Streamlit-friendly dollar delimiters.
+
+    Only delimiter markers are changed; equation contents are preserved.
+    Fenced code blocks are left untouched.
+    """
+    code_blocks = []
+
+    def preserve_code(match):
+        code_blocks.append(match.group(0))
+        return f"\x00CODE_BLOCK_{len(code_blocks) - 1}\x00"
+
+    text = re.sub(r"```[\s\S]*?```", preserve_code, text)
+    text = text.replace(r"\[", "$$").replace(r"\]", "$$")
+    text = text.replace(r"\(", "$").replace(r"\)", "$")
+
+    for index, block in enumerate(code_blocks):
+        text = text.replace(f"\x00CODE_BLOCK_{index}\x00", block)
+
+    return text
+
+
+
 from api_updated_quiz_difficulty import (
     login,
     register,
@@ -562,7 +588,7 @@ else:
 
             with st.chat_message(message["role"]):
 
-                st.markdown(message["content"])
+                st.markdown(normalize_latex_delimiters(message["content"]))
 
                 if message["role"] == "assistant":
 
